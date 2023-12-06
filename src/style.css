@@ -9,3 +9,13 @@ body {
   width: 100vw;
   height: 100vh;
 }
+
+#btn-container {
+  z-index: 100;
+  position: absolute;
+  background-color: transparent;
+}
+
+button {
+  cursor: pointer;
+}

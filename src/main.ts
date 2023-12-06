@@ -1,9 +1,9 @@
 import "./style.css";
 import HavokPhysics from "@babylonjs/havok";
+import { shuffle } from "lodash-es";
 import {
   Scene,
   Engine,
-  FreeCamera,
   Vector3,
   HemisphericLight,
   HavokPlugin,
@@ -11,6 +11,13 @@ import {
   PhysicsAggregate,
   PhysicsShapeType,
   Debug,
+  FreeCameraMouseWheelInput,
+  Axis,
+  Color3,
+  StandardMaterial,
+  ArcRotateCamera,
+  Mesh,
+  PhysicsHelper,
 } from "babylonjs";
 
 // Get the canvas DOM element
@@ -22,39 +29,34 @@ const engine = new Engine(canvas, true, {
 });
 // CreateScene function that creates and return the scene
 // call the createScene function
-createScene().then((scene) => {
-  // run the render loop
-  engine.runRenderLoop(function () {
-    scene.render();
-  });
+const scene = await createScene();
 
-  // the canvas/window resize event handler
-  window.addEventListener("resize", function () {
-    engine.resize();
-  });
-
-  const physicsViewer = new Debug.PhysicsViewer();
-  for (const mesh of scene.rootNodes) {
-    //@ts-ignore
-    if (mesh.physicsBody) {
-      //@ts-ignore
-      const debugMesh = physicsViewer.showBody(mesh.physicsBody);
-    }
-  }
+// run the render loop
+engine.runRenderLoop(function () {
+  scene.render();
 });
+
+// the canvas/window resize event handler
+window.addEventListener("resize", function () {
+  engine.resize();
+});
+
+const physicsViewer = new Debug.PhysicsViewer();
+for (const mesh of scene.rootNodes) {
+  //@ts-ignore
+  if (mesh.physicsBody) {
+    //@ts-ignore
+    const debugMesh = physicsViewer.showBody(mesh.physicsBody);
+  }
+}
+
+createCamera();
+createContainer();
+createAxisHelper();
 
 async function createScene() {
   // This creates a basic Babylon Scene object (non-mesh)
   const scene = new Scene(engine);
-
-  // This creates and positions a free camera (non-mesh)
-  const camera = new FreeCamera("camera1", new Vector3(0, 5, -10), scene);
-
-  // This targets the camera to scene origin
-  camera.setTarget(Vector3.Zero());
-
-  // This attaches the camera to the canvas
-  camera.attachControl(canvas, true);
 
   // This creates a light, aiming 0,1,0 - to the sky (non-mesh)
   const light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
@@ -62,40 +64,29 @@ async function createScene() {
   // Default intensity is 1. Let's dim the light a small amount
   light.intensity = 0.7;
 
-  // Our built-in 'sphere' shape.
-  const sphere = MeshBuilder.CreateSphere(
-    "sphere",
-    { diameter: 2, segments: 32 },
-    scene
-  );
-
-  // Move the sphere upward at 4 units
-  sphere.position.y = 4;
-
-  // Our built-in 'ground' shape.
-  const ground = MeshBuilder.CreateGround(
-    "ground",
-    { width: 10, height: 10 },
-    scene
-  );
-
   // initialize the plugin using the HavokPlugin constructor
-
   const havokInstance = await HavokPhysics();
   const havokPlugin = new HavokPlugin(true, havokInstance);
 
   // enable physics in the scene with a gravity
   scene.enablePhysics(new Vector3(0, -9.8, 0), havokPlugin);
 
-  // Create a sphere shape and the associated body. Size will be determined automatically.
-  const sphereAggregate = new PhysicsAggregate(
-    sphere,
-    PhysicsShapeType.SPHERE,
-    { mass: 1, restitution: 0.75 },
+  return scene;
+}
+
+function createContainer() {
+  const width = 50;
+  const height = 500;
+  const depth = 50;
+
+  const ground = MeshBuilder.CreateBox(
+    "ground",
+    { width, height: 10, depth },
     scene
   );
+  ground.position.x = width / 2;
+  ground.position.z = depth / 2;
 
-  // Create a static box shape.
   const groundAggregate = new PhysicsAggregate(
     ground,
     PhysicsShapeType.BOX,
@@ -103,5 +94,237 @@ async function createScene() {
     scene
   );
 
-  return scene;
+  const planesData = [
+    {
+      id: "x-",
+      position: [0, height / 2, depth / 2],
+      eulerRotation: [Math.PI / 2, 0, -Math.PI / 2],
+    },
+    {
+      id: "x+",
+      position: [width, height / 2, depth / 2],
+      eulerRotation: [Math.PI / 2, 0, Math.PI / 2],
+    },
+    // {
+    //   id: "y-",
+    //   position: [width / 2, 0, depth / 2],
+    //   eulerRotation: [0, 0, 0],
+    // },
+    // {
+    //   id: "y+",
+    //   position: [width / 2, height, depth / 2],
+    //   eulerRotation: [0, 0, 0],
+    // },
+    {
+      id: "z-",
+      position: [width / 2, height / 2, 0],
+      eulerRotation: [Math.PI / 2, 0, 0],
+    },
+    {
+      id: "z+",
+      position: [width / 2, height / 2, depth],
+      eulerRotation: [-Math.PI / 2, 0, 0],
+    },
+  ];
+
+  // Create a material for the plane
+  const material = new StandardMaterial("planeMaterial", scene);
+  material.alpha = 0.5; // Set the alpha value for transparency (0 = fully transparent, 1 = fully opaque)
+  material.diffuseColor = new BABYLON.Color3(0, 1, 0);
+  // material.backFaceCulling = false;
+
+  planesData.forEach(({ id, position, eulerRotation }) => {
+    const plane = MeshBuilder.CreateGround(id, { width, height }, scene);
+    plane.material = material;
+    plane.setAbsolutePosition(new Vector3(...position));
+    plane.rotation.x = eulerRotation[0];
+    plane.rotation.y = eulerRotation[1];
+    plane.rotation.z = eulerRotation[2];
+    // Create a static box shape.
+    const planeAggregate = new PhysicsAggregate(
+      plane,
+      PhysicsShapeType.BOX,
+      { mass: 0 },
+      scene
+    );
+  });
 }
+
+function createCamera(): ArcRotateCamera {
+  const camera = new ArcRotateCamera(
+    "camera1",
+    Math.PI / 4,
+    Math.PI / 4,
+    20,
+    new Vector3(250, 300, 250),
+    scene
+  );
+
+  camera.setTarget(Vector3.Zero());
+
+  camera.wheelPrecision = 0.4;
+  // Create a FreeCameraMouseWheelInput and adjust wheelPrecision
+  // const mouseWheelInput = new FreeCameraMouseWheelInput();
+  // mouseWheelInput.wheelPrecisionX = 1000; // Adjust this value to control zoom sensitivity
+  // mouseWheelInput.wheelPrecisionY = 1000; // Adjust this value to control zoom sensitivity
+  // mouseWheelInput.wheelPrecisionZ = 1000; // Adjust this value to control zoom sensitivity
+
+  // Enable keyboard input for the camera
+  camera.keysLeft = [65]; // A key
+  camera.keysRight = [68]; // D key
+
+  document.addEventListener("keydown", (event) => {
+    switch (event.key) {
+      case "w":
+        // Move forward
+        camera.position.addInPlace(
+          camera.getDirection(Axis.Y).scaleInPlace(0.5)
+        );
+        break;
+      case "s":
+        // Move backward
+        camera.position.subtractInPlace(
+          camera.getDirection(Axis.Y).scaleInPlace(0.5)
+        );
+        break;
+    }
+  });
+
+  // This attaches the camera to the canvas
+  camera.attachControl(canvas, true);
+
+  return camera;
+}
+
+function createAxisHelper() {
+  // Create XYZ axis helpers
+  const axisX = MeshBuilder.CreateLines(
+    "axisX",
+    { points: [Vector3.Zero(), new Vector3(5, 0, 0)], updatable: true },
+    scene
+  );
+  axisX.color = new Color3(1, 0, 0); // Red
+
+  const axisY = MeshBuilder.CreateLines(
+    "axisY",
+    { points: [Vector3.Zero(), new Vector3(0, 5, 0)], updatable: true },
+    scene
+  );
+  axisY.color = new Color3(0, 1, 0); // Green
+
+  const axisZ = MeshBuilder.CreateLines(
+    "axisZ",
+    { points: [Vector3.Zero(), new Vector3(0, 0, 5)], updatable: true },
+    scene
+  );
+  axisZ.color = new Color3(0, 0, 1); // Blue
+}
+
+function createSample(width: number = 40, depth: number = 40) {
+  const numOfSpheres = 2000;
+  const spheresList: Mesh[] = [];
+
+  // Aggregate size distribution based on the provided table
+  const aggregateSizes: any[] = [
+    { size: 9.5, percentage: 100 },
+    { size: 4.75, percentage: 90 },
+    { size: 2.36, percentage: 70 },
+    { size: 1.18, percentage: 30 },
+    { size: 0.6, percentage: 0 },
+  ];
+
+  for (let i = 1; i < aggregateSizes.length; i++) {
+    const n =
+      ((aggregateSizes[i - 1].percentage - aggregateSizes[i].percentage) /
+        100) *
+      numOfSpheres;
+
+    const minDiameter = aggregateSizes[i].size * 100;
+    const maxDiameter = aggregateSizes[i - 1].size * 100;
+
+    for (let j = 0; j < n; j++) {
+      const diameter =
+        Math.floor(Math.random() * (maxDiameter - minDiameter) + minDiameter) /
+        100;
+      const sphere = MeshBuilder.CreateSphere("sphere", { diameter }, scene);
+      spheresList.push(sphere);
+    }
+  }
+
+  // const shuffledSpheres = shuffle(spheresList);
+  const shuffledSpheres = spheresList;
+
+  // Create a material for the spheres
+  const material = new StandardMaterial("material", scene);
+  material.diffuseColor = new Color3(0.5, 0.5, 0.5);
+
+  let currentX = 0;
+  let currentZ = 0;
+  let currentY = 100;
+
+  let counterX = 0;
+  let counterZ = 0;
+  let counter = 0;
+
+  // const maxSize = Math.ceil(maxBy(aggregateSizes, "size"));
+  const maxSize = Math.ceil(9.5);
+  const maxPerX = Math.floor(width / maxSize);
+  const maxPerZ = Math.floor(depth / maxSize);
+  const maxPerLayer = maxPerX * maxPerZ;
+  const numberOfLayers = Math.ceil(numOfSpheres / maxPerLayer);
+
+  shuffledSpheres.forEach((sphere) => {
+    if (counter === maxPerLayer) {
+      counter = 0;
+      currentY += maxSize;
+      currentX = 0;
+      currentZ = 0;
+
+      counterX = 0;
+      counterZ = 0;
+    } else if (counterX === maxPerX) {
+      currentX = 0;
+      counterX = 0;
+      currentZ += maxSize;
+      counterZ = 0;
+    }
+
+    const radius = sphere.getBoundingInfo().boundingBox.extendSize.x;
+
+    sphere.material = material;
+    sphere.position.x = currentX + maxSize / 2;
+    sphere.position.y = currentY;
+    sphere.position.z = currentZ + maxSize / 2;
+
+    new PhysicsAggregate(sphere, PhysicsShapeType.SPHERE, { mass: 100 }, scene);
+
+    currentX += maxSize;
+
+    counterX++;
+    counter++;
+  });
+}
+
+function applyVortex() {
+  const physicsHelper = new PhysicsHelper(scene);
+
+  const vortexEvent = physicsHelper.vortex(new Vector3(25, 1, 25), {
+    radius: 25,
+    strength: 10000,
+    height: 30,
+    centripetalForceThreshold: 0.7,
+    centripetalForceMultiplier: 5,
+    centrifugalForceMultiplier: 0.5,
+    updraftForceMultiplier: 0.02,
+  });
+
+  vortexEvent?.enable();
+  setTimeout(() => vortexEvent?.disable(), 5000);
+}
+
+document.getElementById("createSample")?.addEventListener("click", () => {
+  createSample();
+});
+document.getElementById("applyVortex")?.addEventListener("click", () => {
+  applyVortex();
+});
