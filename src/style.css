@@ -5,6 +5,10 @@ body {
   overflow: hidden;
 }
 
+body {
+  background-color: #33334c;
+}
+
 #renderCanvas {
   width: 100vw;
   height: 100vh;

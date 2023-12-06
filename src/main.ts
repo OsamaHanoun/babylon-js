@@ -1,25 +1,28 @@
 import "./style.css";
 import HavokPhysics from "@babylonjs/havok";
 import { shuffle } from "lodash-es";
+import { Debug } from "babylonjs";
+
+import { STLExport } from "@babylonjs/serializers";
 import {
+  Mesh,
+  MeshBuilder,
   Scene,
   Engine,
   Vector3,
   HemisphericLight,
   HavokPlugin,
-  MeshBuilder,
   PhysicsAggregate,
   PhysicsShapeType,
-  Debug,
-  FreeCameraMouseWheelInput,
   Axis,
   Color3,
   StandardMaterial,
   ArcRotateCamera,
-  Mesh,
   PhysicsHelper,
-} from "babylonjs";
+  VertexBuffer,
+} from "@babylonjs/core";
 
+let meshes: Mesh[] = [];
 // Get the canvas DOM element
 const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
 // Load the 3D engine
@@ -86,6 +89,7 @@ function createContainer() {
   );
   ground.position.x = width / 2;
   ground.position.z = depth / 2;
+  ground.position.y = -10 / 2;
 
   const groundAggregate = new PhysicsAggregate(
     ground,
@@ -129,12 +133,16 @@ function createContainer() {
 
   // Create a material for the plane
   const material = new StandardMaterial("planeMaterial", scene);
-  material.alpha = 0.5; // Set the alpha value for transparency (0 = fully transparent, 1 = fully opaque)
+  material.alpha = 0.2; // Set the alpha value for transparency (0 = fully transparent, 1 = fully opaque)
   material.diffuseColor = new BABYLON.Color3(0, 1, 0);
   // material.backFaceCulling = false;
 
   planesData.forEach(({ id, position, eulerRotation }) => {
-    const plane = MeshBuilder.CreateGround(id, { width, height }, scene);
+    const plane = MeshBuilder.CreateBox(
+      id,
+      { width, height: 1, depth: height },
+      scene
+    );
     plane.material = material;
     plane.setAbsolutePosition(new Vector3(...position));
     plane.rotation.x = eulerRotation[0];
@@ -148,6 +156,24 @@ function createContainer() {
       scene
     );
   });
+}
+
+function createNotch() {
+  const ground = MeshBuilder.CreateBox(
+    "ground",
+    { width: 5, height: 15, depth: 50 },
+    scene
+  );
+  ground.position.x = 25;
+  ground.position.z = 25;
+  ground.position.y = 5;
+
+  const groundAggregate = new PhysicsAggregate(
+    ground,
+    PhysicsShapeType.BOX,
+    { mass: 0 },
+    scene
+  );
 }
 
 function createCamera(): ArcRotateCamera {
@@ -220,8 +246,11 @@ function createAxisHelper() {
   axisZ.color = new Color3(0, 0, 1); // Blue
 }
 
-function createSample(width: number = 40, depth: number = 40) {
-  const numOfSpheres = 2000;
+function createSample(width: number = 50, depth: number = 50) {
+  const element = document.getElementById(
+    "numberOfObjects"
+  ) as HTMLInputElement;
+  const numOfSpheres = +element.value ?? 200;
   const spheresList: Mesh[] = [];
 
   // Aggregate size distribution based on the provided table
@@ -251,8 +280,9 @@ function createSample(width: number = 40, depth: number = 40) {
     }
   }
 
-  // const shuffledSpheres = shuffle(spheresList);
-  const shuffledSpheres = spheresList;
+  const shuffledSpheres = shuffle(spheresList);
+  // const shuffledSpheres = spheresList;
+  meshes = spheresList;
 
   // Create a material for the spheres
   const material = new StandardMaterial("material", scene);
@@ -296,7 +326,12 @@ function createSample(width: number = 40, depth: number = 40) {
     sphere.position.y = currentY;
     sphere.position.z = currentZ + maxSize / 2;
 
-    new PhysicsAggregate(sphere, PhysicsShapeType.SPHERE, { mass: 100 }, scene);
+    new PhysicsAggregate(
+      sphere,
+      PhysicsShapeType.SPHERE,
+      { mass: 10 * radius },
+      scene
+    );
 
     currentX += maxSize;
 
@@ -308,7 +343,7 @@ function createSample(width: number = 40, depth: number = 40) {
 function applyVortex() {
   const physicsHelper = new PhysicsHelper(scene);
 
-  const vortexEvent = physicsHelper.vortex(new Vector3(25, 1, 25), {
+  const vortexEvent = physicsHelper.vortex(new Vector3(25, 0, 25), {
     radius: 25,
     strength: 10000,
     height: 30,
@@ -322,9 +357,35 @@ function applyVortex() {
   setTimeout(() => vortexEvent?.disable(), 5000);
 }
 
+function exportModel() {
+  meshes.forEach((mesh) => {
+    if ("getVerticesData" in mesh) console.log("!!!!!!!!!!!!!!!!!!!!!!!");
+  });
+
+  STLExport.CreateSTL(
+    [...meshes],
+    true,
+    "models",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    true
+  );
+}
 document.getElementById("createSample")?.addEventListener("click", () => {
+  console.log("in");
+
   createSample();
 });
 document.getElementById("applyVortex")?.addEventListener("click", () => {
   applyVortex();
+});
+
+document.getElementById("addNotch")?.addEventListener("click", () => {
+  createNotch();
+});
+
+document.getElementById("download")?.addEventListener("click", () => {
+  exportModel();
 });
