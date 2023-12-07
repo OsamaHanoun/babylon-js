@@ -360,10 +360,6 @@ async function start() {
   }
 
   function exportModel() {
-    meshes.forEach((mesh) => {
-      if ("getVerticesData" in mesh) console.log("!!!!!!!!!!!!!!!!!!!!!!!");
-    });
-
     STLExport.CreateSTL(
       [...meshes],
       true,
@@ -375,9 +371,8 @@ async function start() {
       true
     );
   }
-  document.getElementById("createSample")?.addEventListener("click", () => {
-    console.log("in");
-
+  document.getElementById("createSample")?.addEventListener("click", (e) => {
+    (e.target as HTMLButtonElement).disabled = true;
     createSample();
   });
   document.getElementById("applyVortex")?.addEventListener("click", () => {
