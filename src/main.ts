@@ -343,11 +343,16 @@ async function start() {
   }
 
   function applyVortex() {
+    const element = document.getElementById(
+      "numberOfObjects"
+    ) as HTMLInputElement;
+    const power = +element.value ?? 1000;
+
     const physicsHelper = new PhysicsHelper(scene);
 
     const vortexEvent = physicsHelper.vortex(new Vector3(25, 0, 25), {
       radius: 25,
-      strength: 10000,
+      strength: power,
       height: 30,
       centripetalForceThreshold: 0.7,
       centripetalForceMultiplier: 5,
