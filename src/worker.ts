@@ -1,6 +1,7 @@
 import { maxBy, shuffle } from "lodash-es";
 import { STLExport } from "@babylonjs/serializers";
 import HavokPhysics from "@babylonjs/havok";
+import { STLFileLoader } from "babylonjs-loaders";
 import {
   Mesh,
   MeshBuilder,
@@ -11,15 +12,14 @@ import {
   HavokPlugin,
   PhysicsAggregate,
   PhysicsShapeType,
-  Axis,
   Color3,
   StandardMaterial,
   ArcRotateCamera,
   PhysicsHelper,
   NullEngine,
+  SceneLoader,
   AbstractMesh,
 } from "@babylonjs/core";
-import { SceneSerializer } from "babylonjs";
 
 let engine: Engine;
 let canvas: HTMLCanvasElement;
@@ -302,6 +302,27 @@ function createSample(
     { size: 0.6, percentage: 0 },
   ];
 
+  const modelUrl = new URL("/", import.meta.url).href;
+
+  SceneLoader.RegisterPlugin(new STLFileLoader());
+
+  let baseMesh: AbstractMesh;
+  SceneLoader.ImportMesh(
+    "",
+    modelUrl,
+    "Bodacious Bombul.stl",
+    scene,
+    function (meshes) {
+      baseMesh = meshes[0];
+      baseMesh.isVisible = false;
+
+      console.log(baseMesh);
+    },
+    undefined,
+    undefined,
+    ".stl"
+  );
+
   for (let i = 1; i < aggregateSizes.length; i++) {
     const n =
       ((aggregateSizes[i - 1].percentage - aggregateSizes[i].percentage) /
@@ -315,6 +336,8 @@ function createSample(
       const diameter =
         Math.floor(Math.random() * (maxDiameter - minDiameter) + minDiameter) /
         100;
+
+      baseMesh.clone();
       const sphere = MeshBuilder.CreateSphere("sphere", { diameter }, scene);
       spheresList.push(sphere);
     }
