@@ -1,6 +1,7 @@
-import { maxBy, shuffle } from "lodash-es";
+import { max, maxBy, shuffle } from "lodash-es";
 import { STLExport } from "@babylonjs/serializers";
 import HavokPhysics from "@babylonjs/havok";
+import { Debug, PhysicsShapeConvexHull } from "babylonjs";
 import { STLFileLoader } from "babylonjs-loaders";
 import {
   Mesh,
@@ -19,13 +20,16 @@ import {
   NullEngine,
   SceneLoader,
   AbstractMesh,
-} from "@babylonjs/core";
+  PhysicsBody,
+  PhysicsShapeMesh,
+  PhysicsMotionType,
+} from "babylonjs";
 
 let engine: Engine;
 let canvas: HTMLCanvasElement;
 let scene: Scene;
 let isNullEngine = false;
-let sample: Mesh[];
+let sample: AbstractMesh[];
 
 onmessage = function (evt: MessageEvent<Message>) {
   const { messageName } = evt.data;
@@ -72,7 +76,12 @@ async function init(msg: Message) {
   if (msg.canvas) {
     canvas = msg.canvas;
     isNullEngine = msg.engineType === "nullEngine";
-    engine = isNullEngine ? new NullEngine() : new Engine(canvas, false);
+    engine = isNullEngine
+      ? new NullEngine()
+      : new Engine(canvas, true, {
+          preserveDrawingBuffer: true,
+          stencil: true,
+        });
   }
 
   scene = await createScene();
@@ -80,11 +89,9 @@ async function init(msg: Message) {
     scene.render();
   });
 
-  if (!isNullEngine) {
-    createCamera();
-    createContainer();
-    createAxisHelper();
-  }
+  createContainer();
+  createCamera();
+  createAxisHelper();
 }
 
 function resize(msg: Message) {
@@ -117,7 +124,7 @@ async function createScene() {
 
 function createContainer() {
   const width = 50;
-  const height = 500;
+  const height = 2000;
   const depth = 50;
 
   const ground = MeshBuilder.CreateBox(
@@ -286,12 +293,12 @@ function createAxisHelper() {
   axisZ.color = new Color3(0, 0, 1); // Blue
 }
 
-function createSample(
+async function createSample(
   numOfSpheres = 500,
   width: number = 50,
   depth: number = 50
 ) {
-  const spheresList: Mesh[] = [];
+  const spheresList: AbstractMesh[] = [];
 
   // Aggregate size distribution based on the provided table
   const aggregateSizes: any[] = [
@@ -303,25 +310,45 @@ function createSample(
   ];
 
   const modelUrl = new URL("/", import.meta.url).href;
-
   SceneLoader.RegisterPlugin(new STLFileLoader());
 
-  let baseMesh: AbstractMesh;
-  SceneLoader.ImportMesh(
+  const loader = SceneLoader.ImportMeshAsync(
     "",
     modelUrl,
     "Bodacious Bombul.stl",
     scene,
-    function (meshes) {
-      baseMesh = meshes[0];
-      baseMesh.isVisible = false;
-
-      console.log(baseMesh);
-    },
     undefined,
     undefined,
     ".stl"
   );
+
+  const results = await loader;
+  let baseMesh;
+  let baseShape: PhysicsShapeMesh;
+
+  if (results.meshes[0]) {
+    baseMesh = results.meshes[0];
+    baseMesh.position.set(0, 0, 0);
+    baseMesh.normalizeToUnitCube();
+    baseShape = new PhysicsShapeMesh(baseMesh as Mesh, scene);
+    baseShape.material = { friction: 10, restitution: 0.01 };
+  } else return;
+
+  // const viewer = new Debug.PhysicsViewer(scene);
+  // for (let mesh of scene.rootNodes) {
+  //   // @ts-ignore
+  //   console.log(mesh.physicsBody);
+
+  //   // @ts-ignore
+  //   if (mesh.physicsBody) {
+  //     // @ts-ignore
+  //     viewer.showBody(mesh.physicsBody);
+  //     // @ts-ignore
+  //   } else if (mesh.physicsImpostor) {
+  //     // @ts-ignore
+  //     viewer.showImpostor(mesh.physicsImpostor, mesh);
+  //   }
+  // }
 
   for (let i = 1; i < aggregateSizes.length; i++) {
     const n =
@@ -329,26 +356,29 @@ function createSample(
         100) *
       numOfSpheres;
 
-    const minDiameter = aggregateSizes[i].size * 100;
-    const maxDiameter = aggregateSizes[i - 1].size * 100;
-
     for (let j = 0; j < n; j++) {
-      const diameter =
-        Math.floor(Math.random() * (maxDiameter - minDiameter) + minDiameter) /
-        100;
+      const mesh = (baseMesh as Mesh).createInstance(
+        aggregateSizes[i].size + "-" + j
+      );
 
-      baseMesh.clone();
-      const sphere = MeshBuilder.CreateSphere("sphere", { diameter }, scene);
-      spheresList.push(sphere);
+      if (mesh) {
+        mesh.clone(aggregateSizes[i] + "-" + j);
+        const scale = aggregateSizes[i].size * 0.04;
+        mesh.scaling = new Vector3(scale, scale, scale);
+        spheresList.push(mesh);
+      }
     }
   }
 
-  // const shuffledSpheres = shuffle(spheresList);
-  const shuffledSpheres = spheresList;
+  baseMesh.isVisible = false;
+
+  const shuffledSpheres = shuffle(spheresList);
+  // const shuffledSpheres = spheresList;
   sample = [...spheresList];
-  // Create a material for the spheres
-  const material = new StandardMaterial("material", scene);
-  material.diffuseColor = new Color3(0.5, 0.5, 0.5);
+
+  const boundingInfo = spheresList[0].getBoundingInfo();
+  const dim = boundingInfo.maximum.subtract(boundingInfo.minimum).asArray();
+  const maxSize = (max(dim) ?? 10) * 0.04 * 3;
 
   let currentX = 0;
   let currentZ = 0;
@@ -358,12 +388,12 @@ function createSample(
   let counterZ = 0;
   let counter = 0;
 
-  const maxSize = Math.ceil(maxBy(aggregateSizes, "size").size);
+  // const maxSize = Math.ceil(maxBy(aggregateSizes, "size").size);
   const maxPerX = Math.floor(width / maxSize);
   const maxPerZ = Math.floor(depth / maxSize);
   const maxPerLayer = maxPerX * maxPerZ;
 
-  shuffledSpheres.forEach((sphere) => {
+  shuffledSpheres.forEach((mesh) => {
     if (counter === maxPerLayer) {
       counter = 0;
       currentY += maxSize;
@@ -379,19 +409,18 @@ function createSample(
       counterZ = 0;
     }
 
-    const radius = sphere.getBoundingInfo().boundingBox.extendSize.x;
+    const radius = mesh.getBoundingInfo().boundingBox.extendSize.x;
 
-    sphere.position.x = currentX + maxSize / 2;
-    sphere.position.y = currentY;
-    sphere.position.z = currentZ + maxSize / 2;
+    mesh.position.x = currentX + maxSize / 2;
+    mesh.position.y = currentY;
+    mesh.position.z = currentZ + maxSize / 2;
 
-    new PhysicsAggregate(
-      sphere,
-      PhysicsShapeType.SPHERE,
-      { mass: 10 * radius, friction: 100 },
-      scene
-    );
+    const body = new PhysicsBody(mesh, PhysicsMotionType.DYNAMIC, false, scene);
 
+    body.shape = baseShape;
+    body.setMassProperties({
+      mass: 1,
+    });
     currentX += maxSize;
 
     counterX++;
@@ -405,7 +434,7 @@ function applyVortex(power: number) {
   const vortexEvent = physicsHelper.vortex(new Vector3(25, 0, 25), {
     radius: 25,
     strength: power,
-    height: 30,
+    height: 50,
     centripetalForceThreshold: 0.7,
     centripetalForceMultiplier: 5,
     centrifugalForceMultiplier: 0.5,
@@ -438,18 +467,16 @@ function destroySceneAndEngine() {
 }
 
 function getMeshes() {
-  // const transferableMeshData = SceneSerializer.SerializeMesh(scene.meshes);
-
   const stlFile = STLExport.CreateSTL(
+    //@ts-ignore
     sample,
     false,
     "models",
     true,
-    undefined,
-    undefined,
-    undefined,
-    true
+    true,
+    true,
+    true,
+    false
   );
-
   postMessage({ messageName: "stlFile", stlFile });
 }
