@@ -1,38 +1,111 @@
+import { Mesh, SceneLoader } from "@babylonjs/core";
 import "./style.css";
+import { STLExport } from "@babylonjs/serializers";
 
 // Get the canvas DOM element
 const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
 canvas.width = canvas.clientWidth;
 canvas.height = canvas.clientHeight;
 const offscreen = canvas.transferControlToOffscreen();
+let meshes: any;
 
 // web worker
 const worker = new Worker(new URL("./worker.ts", import.meta.url), {
   type: "module",
 });
 
-worker.postMessage({ canvas: offscreen }, [offscreen]);
+document.getElementById("init")?.addEventListener("click", (e) => {
+  disableButton(e);
 
-// resize
+  worker.postMessage(
+    {
+      messageName: "init",
+      canvas: offscreen,
+      height: canvas.clientHeight,
+    },
+    [offscreen]
+  );
+});
+
+worker.onmessage = (e: MessageEvent<Message>) => {
+  const { messageName } = e.data;
+
+  switch (messageName) {
+    case "stlFile":
+      downloadSTL(e.data.stlFile);
+      break;
+
+    default:
+      break;
+  }
+};
+
 window.addEventListener("resize", () => {
   worker.postMessage({
+    messageName: "resize",
     width: canvas.clientWidth,
     height: canvas.clientHeight,
   });
 });
 
-// document.getElementById("createSample")?.addEventListener("click", (e) => {
-//   (e.target as HTMLButtonElement).disabled = true;
-//   createSample();
-// });
-// document.getElementById("applyVortex")?.addEventListener("click", () => {
-//   applyVortex();
-// });
+document.getElementById("createSample")?.addEventListener("click", (e) => {
+  disableButton(e);
 
-// document.getElementById("addNotch")?.addEventListener("click", () => {
-//   createNotch();
-// });
+  const element = document.getElementById(
+    "numberOfObjects"
+  ) as HTMLInputElement;
 
-// document.getElementById("download")?.addEventListener("click", () => {
-//   exportModel();
-// });
+  worker.postMessage({
+    messageName: "createSample",
+    nBodies: +element.value ?? 500,
+  });
+});
+document.getElementById("applyVortex")?.addEventListener("click", (e) => {
+  const element = document.getElementById(
+    "numberOfObjects"
+  ) as HTMLInputElement;
+  const power = +element.value ?? 1000;
+
+  worker.postMessage({
+    messageName: "applyVortex",
+    power,
+  });
+});
+
+document.getElementById("addNotch")?.addEventListener("click", () => {
+  worker.postMessage({
+    messageName: "addNotch",
+  });
+});
+
+document.getElementById("download")?.addEventListener("click", () => {
+  exportModel();
+  // worker.postMessage({
+  //   messageName: "exportModel",
+  // });
+});
+
+function disableButton(event: Event) {
+  (event.target as HTMLButtonElement).disabled = true;
+}
+
+function exportModel() {
+  worker.postMessage({
+    messageName: "pauseSimulation",
+  });
+
+  worker.postMessage({
+    messageName: "getMeshes",
+  });
+}
+
+function downloadSTL(stlFile: any) {
+  const blob = new Blob([stlFile], { type: "application/octet-stream" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "sample.stl";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 7000);
+}

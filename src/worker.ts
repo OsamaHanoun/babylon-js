@@ -1,5 +1,5 @@
+import { maxBy, shuffle } from "lodash-es";
 import { STLExport } from "@babylonjs/serializers";
-import { shuffle } from "lodash-es";
 import HavokPhysics from "@babylonjs/havok";
 import {
   Mesh,
@@ -16,43 +16,83 @@ import {
   StandardMaterial,
   ArcRotateCamera,
   PhysicsHelper,
+  NullEngine,
+  AbstractMesh,
 } from "@babylonjs/core";
+import { SceneSerializer } from "babylonjs";
 
-let meshes: Mesh[] = [];
 let engine: Engine;
 let canvas: HTMLCanvasElement;
 let scene: Scene;
+let isNullEngine = false;
+let sample: Mesh[];
 
-onmessage = function (evt) {
-  if (!canvas && !engine) {
-    console.log("38");
-    canvas = evt.data.canvas;
-    engine = new Engine(canvas, false, {
-      //   preserveDrawingBuffer: true,
-      //   stencil: true,
-    });
+onmessage = function (evt: MessageEvent<Message>) {
+  const { messageName } = evt.data;
 
-    start();
-  }
+  switch (messageName) {
+    case "init":
+      init(evt.data);
+      break;
 
-  if (evt.data.width) {
-    canvas.width = evt.data.width;
-    canvas.height = evt.data.height;
+    case "resize":
+      resize(evt.data);
+      break;
+
+    case "createSample":
+      createSample(evt.data.nBodies);
+      break;
+
+    case "applyVortex":
+      applyVortex(evt.data.power);
+      break;
+
+    case "addNotch":
+      createNotch();
+      break;
+
+    case "getMeshes":
+      getMeshes();
+      break;
+
+    case "pauseSimulation":
+      pauseSimulation();
+      break;
+
+    case "destroySceneAndEngine":
+      destroySceneAndEngine();
+      break;
+
+    default:
+      break;
   }
 };
 
-async function start() {
+async function init(msg: Message) {
+  if (msg.canvas) {
+    canvas = msg.canvas;
+    isNullEngine = msg.engineType === "nullEngine";
+    engine = isNullEngine ? new NullEngine() : new Engine(canvas, false);
+  }
+
   scene = await createScene();
   engine.runRenderLoop(function () {
-    console.log();
-
     scene.render();
   });
 
-  createCamera();
-  createContainer();
-  createAxisHelper();
-  createSample();
+  if (!isNullEngine) {
+    createCamera();
+    createContainer();
+    createAxisHelper();
+  }
+}
+
+function resize(msg: Message) {
+  if (canvas) {
+    const { width, height } = msg;
+    canvas.width = width;
+    canvas.height = height;
+  }
 }
 
 async function createScene() {
@@ -246,12 +286,11 @@ function createAxisHelper() {
   axisZ.color = new Color3(0, 0, 1); // Blue
 }
 
-function createSample(width: number = 50, depth: number = 50) {
-  //   const element = document.getElementById(
-  //     "numberOfObjects"
-  //   ) as HTMLInputElement;
-  //   const numOfSpheres = +element.value ?? 200;
-  const numOfSpheres = 5000;
+function createSample(
+  numOfSpheres = 500,
+  width: number = 50,
+  depth: number = 50
+) {
   const spheresList: Mesh[] = [];
 
   // Aggregate size distribution based on the provided table
@@ -281,10 +320,9 @@ function createSample(width: number = 50, depth: number = 50) {
     }
   }
 
-  const shuffledSpheres = shuffle(spheresList);
-  // const shuffledSpheres = spheresList;
-  meshes = spheresList;
-
+  // const shuffledSpheres = shuffle(spheresList);
+  const shuffledSpheres = spheresList;
+  sample = [...spheresList];
   // Create a material for the spheres
   const material = new StandardMaterial("material", scene);
   material.diffuseColor = new Color3(0.5, 0.5, 0.5);
@@ -297,12 +335,10 @@ function createSample(width: number = 50, depth: number = 50) {
   let counterZ = 0;
   let counter = 0;
 
-  // const maxSize = Math.ceil(maxBy(aggregateSizes, "size"));
-  const maxSize = Math.ceil(9.5);
+  const maxSize = Math.ceil(maxBy(aggregateSizes, "size").size);
   const maxPerX = Math.floor(width / maxSize);
   const maxPerZ = Math.floor(depth / maxSize);
   const maxPerLayer = maxPerX * maxPerZ;
-  const numberOfLayers = Math.ceil(numOfSpheres / maxPerLayer);
 
   shuffledSpheres.forEach((sphere) => {
     if (counter === maxPerLayer) {
@@ -322,7 +358,6 @@ function createSample(width: number = 50, depth: number = 50) {
 
     const radius = sphere.getBoundingInfo().boundingBox.extendSize.x;
 
-    // sphere.material = material;
     sphere.position.x = currentX + maxSize / 2;
     sphere.position.y = currentY;
     sphere.position.z = currentZ + maxSize / 2;
@@ -330,7 +365,7 @@ function createSample(width: number = 50, depth: number = 50) {
     new PhysicsAggregate(
       sphere,
       PhysicsShapeType.SPHERE,
-      { mass: 10 * radius },
+      { mass: 10 * radius, friction: 100 },
       scene
     );
 
@@ -341,12 +376,7 @@ function createSample(width: number = 50, depth: number = 50) {
   });
 }
 
-function applyVortex() {
-  const element = document.getElementById(
-    "numberOfObjects"
-  ) as HTMLInputElement;
-  const power = +element.value ?? 1000;
-
+function applyVortex(power: number) {
   const physicsHelper = new PhysicsHelper(scene);
 
   const vortexEvent = physicsHelper.vortex(new Vector3(25, 0, 25), {
@@ -363,15 +393,40 @@ function applyVortex() {
   setTimeout(() => vortexEvent?.disable(), 5000);
 }
 
-function exportModel() {
-  STLExport.CreateSTL(
-    [...meshes],
-    true,
+function pauseSimulation() {
+  // Stop the rendering loop
+  engine.stopRenderLoop();
+
+  // Disable the physics engine (if physics is enabled)
+  if (scene.isPhysicsEnabled()) {
+    scene.disablePhysicsEngine();
+  }
+}
+
+function destroySceneAndEngine() {
+  // Dispose of the scene, which will also dispose of the meshes
+  scene.dispose();
+
+  // Stop the engine
+  engine.stopRenderLoop();
+
+  // Dispose of the engine
+  // engine.dispose();
+}
+
+function getMeshes() {
+  // const transferableMeshData = SceneSerializer.SerializeMesh(scene.meshes);
+
+  const stlFile = STLExport.CreateSTL(
+    sample,
+    false,
     "models",
-    undefined,
+    true,
     undefined,
     undefined,
     undefined,
     true
   );
+
+  postMessage({ messageName: "stlFile", stlFile });
 }
