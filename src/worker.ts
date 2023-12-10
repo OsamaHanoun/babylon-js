@@ -1,7 +1,7 @@
 import { max, maxBy, shuffle } from "lodash-es";
 import { STLExport } from "@babylonjs/serializers";
 import HavokPhysics from "@babylonjs/havok";
-import { Debug, PhysicsShapeConvexHull } from "babylonjs";
+import { Debug, PhysicsShapeConvexHull, PhysicsViewer } from "babylonjs";
 import { STLFileLoader } from "babylonjs-loaders";
 import {
   Mesh,
@@ -30,6 +30,7 @@ let canvas: HTMLCanvasElement;
 let scene: Scene;
 let isNullEngine = false;
 let sample: AbstractMesh[];
+let physicsViewer: PhysicsViewer;
 
 onmessage = function (evt: MessageEvent<Message>) {
   const { messageName } = evt.data;
@@ -67,6 +68,10 @@ onmessage = function (evt: MessageEvent<Message>) {
       destroySceneAndEngine();
       break;
 
+    case "activatePhysicsViewer":
+      activatePhysicsViewer();
+      break;
+
     default:
       break;
   }
@@ -85,6 +90,8 @@ async function init(msg: Message) {
   }
 
   scene = await createScene();
+  physicsViewer = new Debug.PhysicsViewer(scene);
+
   engine.runRenderLoop(function () {
     scene.render();
   });
@@ -230,8 +237,7 @@ function createCamera(): ArcRotateCamera {
     new Vector3(250, 300, 250),
     scene
   );
-
-  camera.setTarget(Vector3.Zero());
+  new Vector3(250, 300, 250), camera.setTarget(Vector3.Zero());
 
   camera.wheelPrecision = 0.4;
   // Create a FreeCameraMouseWheelInput and adjust wheelPrecision
@@ -324,31 +330,13 @@ async function createSample(
 
   const results = await loader;
   let baseMesh;
-  let baseShape: PhysicsShapeMesh;
 
   if (results.meshes[0]) {
     baseMesh = results.meshes[0];
     baseMesh.position.set(0, 0, 0);
+    const scale = 0.04 * 3 * 10;
     baseMesh.normalizeToUnitCube();
-    baseShape = new PhysicsShapeMesh(baseMesh as Mesh, scene);
-    baseShape.material = { friction: 10, restitution: 0.01 };
   } else return;
-
-  // const viewer = new Debug.PhysicsViewer(scene);
-  // for (let mesh of scene.rootNodes) {
-  //   // @ts-ignore
-  //   console.log(mesh.physicsBody);
-
-  //   // @ts-ignore
-  //   if (mesh.physicsBody) {
-  //     // @ts-ignore
-  //     viewer.showBody(mesh.physicsBody);
-  //     // @ts-ignore
-  //   } else if (mesh.physicsImpostor) {
-  //     // @ts-ignore
-  //     viewer.showImpostor(mesh.physicsImpostor, mesh);
-  //   }
-  // }
 
   for (let i = 1; i < aggregateSizes.length; i++) {
     const n =
@@ -409,23 +397,24 @@ async function createSample(
       counterZ = 0;
     }
 
-    const radius = mesh.getBoundingInfo().boundingBox.extendSize.x;
-
     mesh.position.x = currentX + maxSize / 2;
     mesh.position.y = currentY;
     mesh.position.z = currentZ + maxSize / 2;
 
     const body = new PhysicsBody(mesh, PhysicsMotionType.DYNAMIC, false, scene);
+    body.shape = new PhysicsShapeConvexHull(mesh as Mesh, scene);
+    body.shape.material = { friction: 10, restitution: 0 };
 
-    body.shape = baseShape;
     body.setMassProperties({
-      mass: 1,
+      mass: 10 * mesh.getBoundingInfo().boundingBox.extendSize.x,
     });
+
     currentX += maxSize;
 
     counterX++;
     counter++;
   });
+  console.log(sample.length);
 }
 
 function applyVortex(power: number) {
@@ -466,17 +455,25 @@ function destroySceneAndEngine() {
   // engine.dispose();
 }
 
+function activatePhysicsViewer() {
+  sample.forEach((mesh) => {
+    if (mesh.physicsBody) {
+      physicsViewer.showBody(mesh.physicsBody);
+    }
+  });
+}
+
 function getMeshes() {
   const stlFile = STLExport.CreateSTL(
     //@ts-ignore
     sample,
     false,
     "models",
+    false,
+    false,
     true,
     true,
-    true,
-    true,
-    false
+    true
   );
   postMessage({ messageName: "stlFile", stlFile });
 }

@@ -49,7 +49,7 @@ window.addEventListener("resize", () => {
 });
 
 document.getElementById("createSample")?.addEventListener("click", (e) => {
-  disableButton(e);
+  // disableButton(e);
 
   const element = document.getElementById(
     "numberOfObjects"
@@ -78,18 +78,15 @@ document.getElementById("addNotch")?.addEventListener("click", () => {
   });
 });
 
+document
+  .getElementById("activatePhysicsViewer")
+  ?.addEventListener("click", () => {
+    worker.postMessage({
+      messageName: "activatePhysicsViewer",
+    });
+  });
+
 document.getElementById("download")?.addEventListener("click", () => {
-  exportModel();
-  // worker.postMessage({
-  //   messageName: "exportModel",
-  // });
-});
-
-function disableButton(event: Event) {
-  (event.target as HTMLButtonElement).disabled = true;
-}
-
-function exportModel() {
   worker.postMessage({
     messageName: "pauseSimulation",
   });
@@ -97,6 +94,10 @@ function exportModel() {
   worker.postMessage({
     messageName: "getMeshes",
   });
+});
+
+function disableButton(event: Event) {
+  (event.target as HTMLButtonElement).disabled = true;
 }
 
 function downloadSTL(stlFile: any) {
