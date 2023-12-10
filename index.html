@@ -4,11 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Babylon</title>
-    <script type="module" crossorigin src="/babylon-js/assets/index-zWRuwh5o.js"></script>
+    <script type="module" crossorigin src="/babylon-js/assets/index-eiWivC5r.js"></script>
     <link rel="stylesheet" crossorigin href="/babylon-js/assets/index-KkJBLbyD.css">
   </head>
   <body>
     <div id="btn-container">
+      <button id="init">Initialize</button>
       <input
         id="numberOfObjects"
         type="number"
@@ -21,9 +22,10 @@
       <button id="applyVortex">Apply Vortex</button>
       <label for="vortexPower">
         Vortex Power
-        <input id="vortexPower" type="number" min="0" step="10" value="1000" />
+        <input id="vortexPower" type="number" min="0" step="10" value="20" />
       </label>
       <button id="addNotch">Add Notch</button>
+      <button id="activatePhysicsViewer">Activate Physics Viewer</button>
       <button id="download">Download Models</button>
     </div>
     <canvas id="renderCanvas"></canvas>
