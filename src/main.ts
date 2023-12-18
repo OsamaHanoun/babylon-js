@@ -48,9 +48,7 @@ window.addEventListener("resize", () => {
   });
 });
 
-document.getElementById("createSample")?.addEventListener("click", (e) => {
-  // disableButton(e);
-
+document.getElementById("createSample")?.addEventListener("click", () => {
   const element = document.getElementById(
     "numberOfObjects"
   ) as HTMLInputElement;
@@ -60,7 +58,8 @@ document.getElementById("createSample")?.addEventListener("click", (e) => {
     nBodies: +element.value ?? 500,
   });
 });
-document.getElementById("applyVortex")?.addEventListener("click", (e) => {
+
+document.getElementById("applyVortex")?.addEventListener("click", () => {
   const element = document.getElementById(
     "numberOfObjects"
   ) as HTMLInputElement;

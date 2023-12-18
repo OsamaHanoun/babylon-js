@@ -3,8 +3,5 @@ export default {
   optimizeDeps: {
     exclude: ["@babylonjs/havok"],
   },
-  build: {
-    outDir: "public",
-  },
   publicDir: "assets",
 };

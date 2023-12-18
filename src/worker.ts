@@ -414,7 +414,6 @@ async function createSample(
     counterX++;
     counter++;
   });
-  console.log(sample.length);
 }
 
 function applyVortex(power: number) {
