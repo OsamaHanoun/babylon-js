@@ -8,7 +8,8 @@ export class CSVAggregateReader {
       dynamicTyping: true,
       header: true,
       complete: function ({ data }) {
-        data.forEach((params: any) => {
+        data.forEach((params: any, index) => {
+          params.id = index;
           params.maxVolumeFriction = params["vf_max"];
           delete params["vf_max"];
 

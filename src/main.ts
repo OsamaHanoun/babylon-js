@@ -57,34 +57,27 @@ window.addEventListener("resize", () => {
   });
 });
 
-document.getElementById("createSample")?.addEventListener("click", () => {
-  const element = document.getElementById(
-    "numberOfObjects"
-  ) as HTMLInputElement;
-
+document.getElementById("pauseSimulation")?.addEventListener("click", () => {
   worker.postMessage({
-    messageName: "createSample",
-    nBodies: +element.value,
+    messageName: "pauseSimulation",
   });
 });
 
-document.getElementById("applyVortex")?.addEventListener("click", () => {
-  const element = document.getElementById(
-    "numberOfObjects"
-  ) as HTMLInputElement;
-  const power = +element.value;
-
-  worker.postMessage({
-    messageName: "applyVortex",
-    power,
+document
+  .getElementById("stopAddingAggregates")
+  ?.addEventListener("click", () => {
+    worker.postMessage({
+      messageName: "stopAddingAggregates",
+    });
   });
-});
 
-document.getElementById("addNotch")?.addEventListener("click", () => {
-  worker.postMessage({
-    messageName: "addNotch",
+document
+  .getElementById("presumeAddingAggregates")
+  ?.addEventListener("click", () => {
+    worker.postMessage({
+      messageName: "presumeAddingAggregates",
+    });
   });
-});
 
 document
   .getElementById("activatePhysicsViewer")

@@ -12,9 +12,12 @@ import {
   StandardMaterial,
   Color3,
   ArcRotateCamera,
-  AbstractMesh,
+  PhysicsBody,
+  PhysicsMotionType,
+  PhysicsShapeConvexHull,
 } from "babylonjs";
 import { Aggregate } from "./types";
+import { AggregateGenerator } from "./aggregate-generator";
 
 export class WorldManager {
   private canvas?: HTMLCanvasElement;
@@ -25,6 +28,14 @@ export class WorldManager {
   private height: number;
   private depth: number;
   private aggregatesParams: Aggregate[];
+  private aggregatesTracker: { id: string; count: number }[] = [];
+  private maxDimension = 0;
+  private grid = { x: 0, z: 0 };
+  private currentLocation = { x: 0, y: 0, z: 0 };
+  private totalCount = 0;
+  private totalAggregates = 0;
+
+  private canAddAggregates = true;
 
   constructor(
     canvas: HTMLCanvasElement | undefined,
@@ -47,22 +58,33 @@ export class WorldManager {
             preserveDrawingBuffer: true,
             stencil: true,
           });
-  }
 
-  async init() {
-    await this.createScene();
-    this.addContainer();
+    this.calculateMaxDimension();
+    this.calculateGrid();
     this.addVolumeParam();
     this.addCountParam();
+    this.calculateTotalCount();
+  }
+  async run() {
+    await this.createScene();
+    this.addContainer();
+    this.addCamera();
 
     if (!this.isNullEngine && this.canvas) {
       this.addLighting();
-      this.addCamera();
       this.addAxisHelper();
     }
 
+    let frame = 1;
     this.engine.runRenderLoop(() => {
       this.scene?.render();
+
+      if (this.canAddAggregates && --frame === 0) {
+        for (let index = 0; index < this.grid.x * this.grid.z; index++) {}
+        this.addAggregate();
+        console.log(this.totalAggregates++);
+        frame = 1;
+      }
     });
   }
 
@@ -83,11 +105,47 @@ export class WorldManager {
     }
   }
 
+  stopAddingAggregates() {
+    this.canAddAggregates = false;
+  }
+
+  presumeAddingAggregates() {
+    this.canAddAggregates = true;
+  }
+
   private async createScene() {
     this.scene = new Scene(this.engine);
     const havokInstance = await HavokPhysics();
     const havokPlugin = new HavokPlugin(true, havokInstance);
     this.scene.enablePhysics(new Vector3(0, -9.8, 0), havokPlugin);
+  }
+
+  private calculateMaxDimension() {
+    this.maxDimension = this.aggregatesParams.reduce(
+      (previousValue, currentValue) => {
+        return Math.max(
+          previousValue,
+          currentValue.a,
+          currentValue.b,
+          currentValue.c
+        );
+      },
+      0
+    );
+  }
+
+  private calculateGrid() {
+    this.grid = {
+      x: Math.floor(this.width / this.maxDimension),
+      z: Math.floor(this.depth / this.maxDimension),
+    };
+  }
+
+  private calculateTotalCount() {
+    this.totalCount = this.aggregatesParams.reduce(
+      (count, params) => (params.count ? count + params.count : count),
+      0
+    );
   }
 
   private addLighting() {
@@ -140,7 +198,7 @@ export class WorldManager {
 
   private addContainer() {
     const width = this.width;
-    const height = this.height * 1.5;
+    const height = this.height;
     const depth = this.depth;
     const thickness = 1;
 
@@ -234,5 +292,66 @@ export class WorldManager {
     });
   }
 
-  private addSample() {}
+  private addAggregate() {
+    const aggregate = this.getRandomAggregate();
+
+    if (!this.scene || !aggregate) return;
+
+    const aggregateMesh = AggregateGenerator.generate(aggregate);
+    aggregateMesh.position = this.getAggregatePosition();
+
+    const aggregateBody = new PhysicsBody(
+      aggregateMesh,
+      PhysicsMotionType.DYNAMIC,
+      false,
+      this.scene
+    );
+    aggregateBody.shape = new PhysicsShapeConvexHull(aggregateMesh, this.scene);
+    aggregateBody.shape.material = { friction: 10, restitution: 0 };
+  }
+
+  private getAggregatePosition(): Vector3 {
+    if (
+      this.currentLocation.x >= this.grid.x - 1 &&
+      this.currentLocation.z >= this.grid.z - 1
+    ) {
+      this.currentLocation.x = 0;
+      this.currentLocation.z = 0;
+      this.currentLocation.y += this.maxDimension;
+    } else if (this.currentLocation.x >= this.grid.x - 1) {
+      this.currentLocation.x = 0;
+      this.currentLocation.z += 1;
+    } else {
+      this.currentLocation.x++;
+    }
+
+    const x =
+      this.currentLocation.x * this.maxDimension + 0.5 * this.maxDimension;
+    const z =
+      this.currentLocation.z * this.maxDimension + 0.5 * this.maxDimension;
+    const y = this.currentLocation.y + this.maxDimension;
+
+    return new Vector3(x, y, z);
+  }
+
+  private getRandomAggregate() {
+    if (!this.aggregatesTracker.length) {
+      this.aggregatesTracker = this.aggregatesParams.map(
+        ({ id, count = 0 }) => {
+          return { id, count };
+        }
+      );
+    }
+
+    const randomIndex = Math.floor(
+      Math.random() * this.aggregatesTracker.length
+    );
+    const { id, count } = this.aggregatesTracker[randomIndex];
+
+    if (--this.aggregatesTracker[randomIndex].count <= 0) {
+      this.aggregatesTracker.splice(randomIndex, 1);
+    }
+
+    return this.aggregatesParams.find((params) => params.id === id);
+  }
 }

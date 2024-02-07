@@ -1,6 +1,6 @@
 import QuickHull from "quickhull3d/dist/QuickHull";
 import { Point, Aggregate } from "./types.js";
-import { Mesh, MeshBuilder } from "babylonjs";
+import { Mesh, MeshBuilder, Vector3 } from "babylonjs";
 
 export class AggregateGenerator {
   static generate(aggregate: Aggregate): Mesh {
@@ -11,23 +11,23 @@ export class AggregateGenerator {
       points.push(this.getRandomPointOnEllipsoid(a, b, c));
     }
 
-    const hull = new QuickHull();
-    hull.build(points);
+    const quickHull = new QuickHull(points);
+    quickHull.build();
+    const vertices = quickHull.vertices.map((vertex: any) => vertex.point);
+    const faces = quickHull.collectFaces();
 
-    const vertices = hull.getVertices();
-    const faces = hull.getFaces();
+    const heptagonalPrism = {
+      name: crypto.randomUUID(),
+      category: ["Prism"],
+      vertex: vertices,
+      face: faces,
+    };
+    const Mesh = MeshBuilder.CreatePolyhedron(crypto.randomUUID(), {
+      custom: heptagonalPrism,
+    });
+    Mesh.rotation = this.getRandomRotation();
 
-    return MeshBuilder.CreatePolyhedron(
-      crypto.randomUUID(),
-      {
-        custom: {
-          category: ["Prism"],
-          vertices,
-          faces,
-        },
-      },
-      null
-    );
+    return Mesh;
   }
 
   private static getRandomPointOnEllipsoid(
@@ -43,5 +43,15 @@ export class AggregateGenerator {
     const z = c * sinPolarAngle;
 
     return [x, y, z];
+  }
+
+  private static getRandomRotation() {
+    const degreesToRadians = (degrees: number) => degrees * (Math.PI / 180);
+
+    return new Vector3(
+      degreesToRadians(Math.random() * 360),
+      degreesToRadians(Math.random() * 360),
+      degreesToRadians(Math.random() * 360)
+    );
   }
 }

@@ -1,4 +1,5 @@
 export type Aggregate = {
+  id: string;
   a: number;
   b: number;
   c: number;

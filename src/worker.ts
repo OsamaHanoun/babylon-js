@@ -13,22 +13,33 @@ onmessage = async function (evt: MessageEvent<Message>) {
       const csvResponse = await fetch(csvUrl);
       const csvString = await csvResponse.text();
       const aggregatesParams = (await CSVAggregateReader.parse(csvString)).data;
-      console.log(aggregatesParams);
 
       worldManager = new WorldManager(
         evt.data.canvas,
         false,
-        250,
-        250,
-        250,
+        100,
+        100,
+        100,
         aggregatesParams
       );
-      worldManager.init();
+      worldManager.run();
       break;
 
     case "resize":
       const { width, height } = evt.data;
       worldManager.resize(width, height);
+      break;
+
+    case "pauseSimulation":
+      worldManager.pauseSimulation();
+      break;
+
+    case "stopAddingAggregates":
+      worldManager.stopAddingAggregates();
+      break;
+
+    case "presumeAddingAggregates":
+      worldManager.presumeAddingAggregates();
       break;
 
     default:
