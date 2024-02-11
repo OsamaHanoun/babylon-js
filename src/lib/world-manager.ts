@@ -23,6 +23,7 @@ import {
 } from "babylonjs";
 import { Aggregate } from "./types";
 import { AggregateGenerator } from "./aggregate-generator";
+import { shuffle } from "lodash-es";
 
 export class WorldManager {
   private canvas?: HTMLCanvasElement;
@@ -34,13 +35,17 @@ export class WorldManager {
   private height: number;
   private depth: number;
   private aggregatesParams: Aggregate[];
-  private aggregatesTracker: { id: string; count: number }[] = [];
+  private aggregatesTracker: string[] = [];
+  // private aggregatesTracker: { id: string; count: number }[] = [];
   private maxDimension = 0;
   private grid = { x: 0, y: 0, z: 0 };
   private currentLocation = { x: 0, y: 0, z: 0 };
   private totalCount = 0;
   private totalAggregates = 0;
   private canAddAggregates = true;
+  private meshToPhysicsBodyMap = new Map<PhysicsBody, Mesh>();
+  private totalVolumeFraction = 0;
+  private totalAggregatesVolume = 0;
 
   constructor(
     canvas: HTMLCanvasElement | undefined,
@@ -92,7 +97,8 @@ export class WorldManager {
         --frame === 0
       ) {
         for (let index = 0; index < this.grid.x * this.grid.z; index++) {
-          this.addAggregate();
+          const mesh = this.addAggregate();
+          mesh && this.addToVolumeFraction(mesh);
         }
         frame = 1;
       }
@@ -148,7 +154,7 @@ export class WorldManager {
   private calculateGrid() {
     this.grid = {
       x: Math.floor(this.width / this.maxDimension),
-      y: Math.ceil(this.height / this.maxDimension) + 1,
+      y: Math.ceil(this.height / this.maxDimension),
       z: Math.floor(this.depth / this.maxDimension),
     };
   }
@@ -348,28 +354,33 @@ export class WorldManager {
 
     let countTriggerExited = 0;
     this.physicsEngine?.onTriggerCollisionObservable.add((event) => {
-      let aggregateMesh: Mesh | undefined;
       if (event.type === PhysicsEventType.TRIGGER_EXITED) {
         countTriggerExited++;
+        const mesh = this.meshToPhysicsBodyMap.get(event.collider);
+        mesh && this.addToVolumeFraction(mesh);
       }
 
       if (totalPerLayer === countTriggerExited) {
-        aggregateMesh === this.addAggregate();
         for (let index = 0; index < totalPerLayer; index++) {
           this.addAggregate();
         }
+
         countTriggerExited = 0;
       }
-
-      // if (aggregateMesh) {
-      //   aggregateMesh.position.x = event.collider.transformNode.position.x;
-      //   aggregateMesh.position.z = event.collider.transformNode.position.z;
-      // }
     });
   }
 
+  private addToVolumeFraction(mesh: Mesh) {
+    const volume = AggregateGenerator.calculateVolume(mesh);
+    this.totalAggregatesVolume += volume ?? 0;
+    this.totalVolumeFraction =
+      (this.totalAggregatesVolume / (this.width * this.height * this.depth)) *
+      100;
+    console.log(this.totalVolumeFraction);
+  }
+
   private addAggregate(): Mesh | undefined {
-    console.log(++this.totalAggregates);
+    // console.log(++this.totalAggregates);
     const aggregate = this.getRandomAggregate();
 
     if (!this.scene || !aggregate) return;
@@ -385,6 +396,8 @@ export class WorldManager {
     );
     aggregateBody.shape = new PhysicsShapeConvexHull(aggregateMesh, this.scene);
     aggregateBody.shape.material = { friction: 10, restitution: 0 };
+
+    this.meshToPhysicsBodyMap.set(aggregateBody, aggregateMesh);
 
     return aggregateMesh;
   }
@@ -417,23 +430,43 @@ export class WorldManager {
     return new Vector3(x, y, z);
   }
 
+  // private getRandomAggregate() {
+  //   if (!this.aggregatesTracker.length) {
+  //     this.aggregatesTracker = this.aggregatesParams.map(
+  //       ({ id, count = 0 }) => {
+  //         return { id, count };
+  //       }
+  //     );
+  //   }
+
+  //   const randomIndex = Math.floor(
+  //     Math.random() * this.aggregatesTracker.length
+  //   );
+  //   const { id } = this.aggregatesTracker[randomIndex];
+
+  //   if (--this.aggregatesTracker[randomIndex].count <= 0) {
+  //     this.aggregatesTracker.splice(randomIndex, 1);
+  //   }
+
+  //   return this.aggregatesParams.find((params) => params.id === id);
+  // }
+
   private getRandomAggregate() {
     if (!this.aggregatesTracker.length) {
-      this.aggregatesTracker = this.aggregatesParams.map(
-        ({ id, count = 0 }) => {
-          return { id, count };
+      this.aggregatesParams.forEach(({ id, count = 0 }) => {
+        for (let index = 0; index < count; index++) {
+          this.aggregatesTracker.push(id);
         }
-      );
+      });
+
+      this.aggregatesTracker = shuffle(this.aggregatesTracker);
     }
 
     const randomIndex = Math.floor(
       Math.random() * this.aggregatesTracker.length
     );
-    const { id, count } = this.aggregatesTracker[randomIndex];
-
-    if (--this.aggregatesTracker[randomIndex].count <= 0) {
-      this.aggregatesTracker.splice(randomIndex, 1);
-    }
+    const id = this.aggregatesTracker[randomIndex];
+    this.aggregatesTracker.splice(randomIndex, 1);
 
     return this.aggregatesParams.find((params) => params.id === id);
   }

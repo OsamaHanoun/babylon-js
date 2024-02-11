@@ -17,9 +17,9 @@ onmessage = async function (evt: MessageEvent<Message>) {
       worldManager = new WorldManager(
         evt.data.canvas,
         false,
-        100,
-        100,
-        100,
+        50,
+        50,
+        50,
         aggregatesParams
       );
       worldManager.run();
