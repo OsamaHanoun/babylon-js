@@ -24,6 +24,11 @@ import {
 import { Aggregate } from "./types";
 import { AggregateGenerator } from "./aggregate-generator";
 import { shuffle } from "lodash-es";
+import { CuboidContainer } from "./parts/cuboid-container";
+import { Light } from "./parts/light";
+import { AxisHelper } from "./parts/axis-helper";
+import { Camera } from "./parts/camera";
+import { CylinderContainer } from "./parts/cylinder-container";
 
 export class WorldManager {
   private canvas?: HTMLCanvasElement;
@@ -78,13 +83,24 @@ export class WorldManager {
 
   async run() {
     await this.createScene();
-    this.addCamera();
-    this.addContainer();
+    const container = new CuboidContainer(
+      this.isNullEngine,
+      this.width,
+      this.height,
+      this.depth
+    );
+    // const container = new CylinderContainer(
+    //   this.isNullEngine,
+    //   this.width / 2,
+    //   this.height
+    // );
+
+    new Camera(container);
     this.addTrigger();
 
     if (!this.isNullEngine && this.canvas) {
-      this.addLighting();
-      this.addAxisHelper();
+      new Light();
+      new AxisHelper();
     }
 
     let frame = 1;
@@ -164,123 +180,6 @@ export class WorldManager {
       (count, params) => (params.count ? count + params.count : count),
       0
     );
-  }
-
-  private addLighting() {
-    const light = new HemisphericLight(
-      "light",
-      new Vector3(0, 1, 0),
-      this.scene
-    );
-    light.intensity = 0.7;
-  }
-
-  private addCamera() {
-    const camera = new ArcRotateCamera(
-      "camera1",
-      Math.PI / 4,
-      Math.PI / 4,
-      20,
-      new Vector3(this.width, this.height * 3, this.depth * 3),
-      this.scene
-    );
-    new Vector3(this.width, this.height * 3, this.depth * 3),
-      camera.setTarget(Vector3.Zero());
-
-    camera.attachControl(this.canvas, true);
-  }
-
-  private addAxisHelper() {
-    // Create XYZ axis helpers
-    const axisX = MeshBuilder.CreateLines(
-      "axisX",
-      { points: [Vector3.Zero(), new Vector3(5, 0, 0)], updatable: true },
-      this.scene
-    );
-    axisX.color = new Color3(1, 0, 0); // Red
-
-    const axisY = MeshBuilder.CreateLines(
-      "axisY",
-      { points: [Vector3.Zero(), new Vector3(0, 5, 0)], updatable: true },
-      this.scene
-    );
-    axisY.color = new Color3(0, 1, 0); // Green
-
-    const axisZ = MeshBuilder.CreateLines(
-      "axisZ",
-      { points: [Vector3.Zero(), new Vector3(0, 0, 5)], updatable: true },
-      this.scene
-    );
-    axisZ.color = new Color3(0, 0, 1); // Blue
-  }
-
-  private addContainer() {
-    const width = this.width;
-    const height = this.height * 1.25;
-    const depth = this.depth;
-    const thickness = 1;
-
-    const wallsData = [
-      {
-        id: "x-",
-        position: new Vector3(-thickness / 2, height / 2, depth / 2),
-        dimX: thickness,
-        dimY: height,
-        dimZ: depth,
-      },
-      {
-        id: "x+",
-        position: new Vector3(width + thickness / 2, height / 2, depth / 2),
-        dimX: thickness,
-        dimY: height,
-        dimZ: depth,
-      },
-      {
-        id: "y-",
-        position: new Vector3(width / 2, -thickness / 2, depth / 2),
-        dimX: width,
-        dimY: thickness,
-        dimZ: depth,
-      },
-      {
-        id: "z-",
-        position: new Vector3(width / 2, height / 2, -thickness / 2),
-        dimX: width,
-        dimY: height,
-        dimZ: thickness,
-      },
-      {
-        id: "z+",
-        position: new Vector3(width / 2, height / 2, depth + thickness / 2),
-        dimX: width,
-        dimY: height,
-        dimZ: thickness,
-      },
-    ];
-
-    const box = MeshBuilder.CreateBox("box", {
-      height: 1,
-      width: 1,
-      depth: 1,
-      updatable: true,
-    });
-
-    if (!this.isNullEngine) {
-      const material = new StandardMaterial("boxMaterial", this.scene);
-      material.alpha = 0.2;
-      material.diffuseColor = new Color3(0, 1, 0);
-
-      box.material = material;
-    }
-
-    wallsData.forEach(({ dimX, dimY, dimZ, position }) => {
-      const boxClone = box.clone("box");
-      boxClone.scaling = new Vector3(dimX, dimY, dimZ);
-      boxClone.position = position;
-      new PhysicsAggregate(boxClone, PhysicsShapeType.BOX, { mass: 0 });
-    });
-
-    box.dispose();
   }
 
   private addCountParam() {
