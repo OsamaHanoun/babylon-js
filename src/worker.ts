@@ -12,15 +12,15 @@ onmessage = async function (evt: MessageEvent<Message>) {
     case "init":
       const csvResponse = await fetch(csvUrl);
       const csvString = await csvResponse.text();
-      const aggregatesParams = (await CSVAggregateReader.parse(csvString)).data;
+      const baseAggregateArray = await CSVAggregateReader.parse(csvString);
 
       worldManager = new WorldManager(
         evt.data.canvas,
         false,
-        50,
-        50,
-        50,
-        aggregatesParams
+        25,
+        25,
+        25,
+        baseAggregateArray
       );
       worldManager.run();
       break;

@@ -1,24 +1,36 @@
 import { ParseResult, parse } from "papaparse";
-import { Aggregate } from "./types";
+import { BaseAggregate } from "./parts/base-aggregate";
 
 export class CSVAggregateReader {
-  static async parse(csvString: string): Promise<ParseResult<Aggregate>> {
-    return parse(csvString, {
+  static async parse(csvString: string): Promise<BaseAggregate[]> {
+    const aggregateArray: BaseAggregate[] = [];
+
+    parse(csvString, {
       skipEmptyLines: true,
       dynamicTyping: true,
       header: true,
       complete: function ({ data }) {
+        const isNumber = (value: any): boolean => {
+          return typeof value === "number";
+        };
+
         data.forEach((params: any, index) => {
-          params.id = index;
-          params.maxVolumeFriction = params["vf_max"];
-          delete params["vf_max"];
+          const { a, b, c, vf_max, n_cuts } = params;
+          const id = index.toString();
 
-          params.numCuts = params["n_cuts"];
-          delete params["n_cuts"];
+          if (
+            isNumber(a) &&
+            isNumber(b) &&
+            isNumber(c) &&
+            isNumber(vf_max) &&
+            isNumber(n_cuts)
+          ) {
+            aggregateArray.push(new BaseAggregate(id, a, b, c, vf_max, n_cuts));
+          }
         });
-
-        return data;
       },
     });
+
+    return aggregateArray;
   }
 }

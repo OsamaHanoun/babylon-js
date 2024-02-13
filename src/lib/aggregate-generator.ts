@@ -1,9 +1,10 @@
 import QuickHull from "quickhull3d/dist/QuickHull";
-import { Point, Aggregate } from "./types.js";
+import { Point } from "./types.js";
 import { Mesh, MeshBuilder, Vector3, VertexBuffer } from "babylonjs";
+import { BaseAggregate } from "./parts/base-aggregate.js";
 
 export class AggregateGenerator {
-  static generate(aggregate: Aggregate): Mesh {
+  static generate(aggregate: BaseAggregate): Mesh {
     const { a, b, c, numCuts } = aggregate;
     const points: any = [];
 

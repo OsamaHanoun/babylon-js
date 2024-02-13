@@ -21,7 +21,6 @@ import {
   PhysicsEventType,
   Mesh,
 } from "babylonjs";
-import { Aggregate } from "./types";
 import { AggregateGenerator } from "./aggregate-generator";
 import { shuffle } from "lodash-es";
 import { CuboidContainer } from "./parts/cuboid-container";
@@ -29,6 +28,7 @@ import { Light } from "./parts/light";
 import { AxisHelper } from "./parts/axis-helper";
 import { Camera } from "./parts/camera";
 import { CylinderContainer } from "./parts/cylinder-container";
+import { BaseAggregate } from "./parts/base-aggregate";
 
 export class WorldManager {
   private canvas?: HTMLCanvasElement;
@@ -39,7 +39,7 @@ export class WorldManager {
   private width: number;
   private height: number;
   private depth: number;
-  private aggregatesParams: Aggregate[];
+  private baseAggregateArray: BaseAggregate[];
   private aggregatesTracker: string[] = [];
   // private aggregatesTracker: { id: string; count: number }[] = [];
   private maxDimension = 0;
@@ -58,14 +58,14 @@ export class WorldManager {
     width: number,
     height: number,
     depth: number,
-    aggregatesParams: Aggregate[]
+    aggregatesParams: BaseAggregate[]
   ) {
     this.isNullEngine = isNullEngine;
     this.canvas = canvas;
     this.width = width;
     this.height = height;
     this.depth = depth;
-    this.aggregatesParams = aggregatesParams;
+    this.baseAggregateArray = aggregatesParams;
     this.engine =
       this.isNullEngine || !this.canvas
         ? new NullEngine()
@@ -76,7 +76,6 @@ export class WorldManager {
 
     this.calculateMaxDimension();
     this.calculateGrid();
-    this.addVolumeParam();
     this.addCountParam();
     this.calculateTotalCount();
   }
@@ -154,7 +153,7 @@ export class WorldManager {
   }
 
   private calculateMaxDimension() {
-    this.maxDimension = this.aggregatesParams.reduce(
+    this.maxDimension = this.baseAggregateArray.reduce(
       (previousValue, currentValue) => {
         return Math.max(
           previousValue,
@@ -176,14 +175,14 @@ export class WorldManager {
   }
 
   private calculateTotalCount() {
-    this.totalCount = this.aggregatesParams.reduce(
+    this.totalCount = this.baseAggregateArray.reduce(
       (count, params) => (params.count ? count + params.count : count),
       0
     );
   }
 
   private addCountParam() {
-    const largestAggregate = this.aggregatesParams.reduce(
+    const largestAggregate = this.baseAggregateArray.reduce(
       (largestAggregate, currentAggregate) => {
         const maxVolume = largestAggregate.volume ?? 0;
         const currentVolume = currentAggregate.volume ?? 0;
@@ -196,16 +195,9 @@ export class WorldManager {
     const totalVolume =
       largestAggregate.volume / largestAggregate.maxVolumeFriction;
 
-    this.aggregatesParams.forEach((aggregate) => {
+    this.baseAggregateArray.forEach((aggregate) => {
       const { maxVolumeFriction, volume = 1 } = aggregate;
       aggregate.count = Math.round((maxVolumeFriction * totalVolume) / volume);
-    });
-  }
-
-  private addVolumeParam() {
-    this.aggregatesParams.forEach((aggregate) => {
-      const { a, b, c } = aggregate;
-      aggregate.volume = (4 / 3) * Math.PI * a * b * c;
     });
   }
 
@@ -350,9 +342,9 @@ export class WorldManager {
   //   return this.aggregatesParams.find((params) => params.id === id);
   // }
 
-  private getRandomAggregate() {
+  private getRandomAggregate(): BaseAggregate | undefined {
     if (!this.aggregatesTracker.length) {
-      this.aggregatesParams.forEach(({ id, count = 0 }) => {
+      this.baseAggregateArray.forEach(({ id, count = 0 }) => {
         for (let index = 0; index < count; index++) {
           this.aggregatesTracker.push(id);
         }
@@ -367,6 +359,6 @@ export class WorldManager {
     const id = this.aggregatesTracker[randomIndex];
     this.aggregatesTracker.splice(randomIndex, 1);
 
-    return this.aggregatesParams.find((params) => params.id === id);
+    return this.baseAggregateArray.find((params) => params.id === id);
   }
 }
